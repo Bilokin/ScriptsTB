@@ -1,0 +1,400 @@
+
+#include <unistd.h>
+#include <iostream>
+#include "/users/flc/bilokin/Processors/Macros/top/qp.C"
+#define MAXV 8
+#define bin_e 50
+//string BKG_PATH = "/exp/flc/bilokin/Training/bbbar-bkg/exclude/";
+string BKG_PATH = "/exp/flc/bilokin/Training/bbbar-bkg/new/";
+
+void basymmetry(string filename = "TTBarProcessorLeft.root",  bool drawCorrection = true, float drawBkg = true)
+{
+	TFile * file = TFile::Open(filename.c_str());
+	float signalLumi = 250.;
+	float signalLumiR = 250.;
+	int max_e = 1;
+	float fitRange = 0.85;
+	TCanvas * c1 = NULL;
+	if (!c1) 
+	{
+		c1 = new TCanvas("c1", "Data-MC",0,0,500,500);
+	}
+	bool helicity = (filename.substr(14,4) == "Left");
+
+	//c1->Divide(2,1);
+	TH1F * cosReco = new TH1F("cosReco", "E(Ntracks)", bin_e,-1.0,max_e);
+	//TH1F * correctedP = new TH1F("correctedP", "E(Ntracks)", bin_e,-1.0,max_e);
+	TH1F * cosCCbar = new TH1F("cosCCbar", "E(Ntracks)", bin_e,-1.0,max_e);
+	TH1F * cosRecoBkgMass = new TH1F("cosRecoBkgMass", "E(Ntracks)", bin_e,-1.0,max_e);
+	TH1F * cosRecoBkgZZ = new TH1F("cosRecoBkgZZ", "E(Ntracks)", bin_e,-1.0,max_e);
+	cosReco->Sumw2();
+	cosRecoBkgMass->Sumw2();
+	TH1F * cosGen = new TH1F("cosGen", ";cos#theta_{b}", bin_e,-1.0,max_e);
+
+	cosGen->Sumw2();
+	//correctedP->Draw();
+	TTree * normaltree = Stats;
+	//cosReco->SetLineColor(kBlue);
+	cosReco->SetLineWidth(3);
+	makePretty(cosGen, kGreen+1, 2);
+	cosGen->SetFillStyle(3004);
+	cosGen->SetFillColor(kGreen+1);
+	makePretty(cosReco, kBlack);
+	makePretty(cosCCbar, kOrange, 2);
+	makePretty(cosRecoBkgMass, kGray, 2);
+	int forward = GenTree->Draw("qMCcostheta[0] >> cosGen","qMCcostheta > 0 && MCMass > 180 && MCPDG == 5");
+	int backward = GenTree->Draw("qMCcostheta[0] >> +cosGen","qMCcostheta < 0 && MCMass > 180 && MCPDG == 5" );
+	//int forward = Stats->Draw("qMCcostheta >> cosGen","qMCcostheta > 0 && InvMass > 200 && maxPhotonEnergy < 40 && MCPDG == 5");
+	//int backward = Stats->Draw("qMCcostheta >> +cosGen","qMCcostheta < 0 && InvMass > 200 && maxPhotonEnergy < 40 && MCPDG == 5" );
+	
+	//string cuts = "&& MCMass > 200 && MCPDG == 5  && methodCorrect == 1 && B1mass + B2mass < 100+30*abs(B1costheta)";
+	//string cuts = "&& MCMass > 200 && MCPDG == 5  && methodCorrect > -1";
+	//string cuts = "&& MCMass > 200 && MCPDG == 5 && methodUsed == 1  && methodRefused == 0 &&( methodTaken == 3  || methodTaken == 4) && methodCorrect == 1";
+	//string cuts = " && InvMass > 180 && maxPhotonEnergy < 40 && B1mass + B2mass  < 120 && Sphericity < 10.2 && methodRefused == 0 && methodUsed > 0"; 
+	string cuts = " && InvMass > 180 && maxPhotonEnergy < 40 && B1mass + B2mass < 120 - 9.2*abs(ThrustCos)+1.35*abs(ThrustCos)*abs(ThrustCos) &&  methodRefused == 0 && methodUsed > 0";// && methodCorrect > 0"; 
+	//string cuts = " && InvMass > 180 && maxPhotonEnergy < 40 && B1mass + B2mass < 120 && Sphericity < 0.2 && methodRefused == 0 && methodUsed > 0";// && methodCorrect > 0"; 
+	//string cuts = "&& InvMass > 180 && maxPhotonEnergy < 40 && B1mass + B2mass < 120 && Sphericity < 0.25 && methodUsed == 1 && methodTaken == 2"; //eRpL
+
+	string fcuts = "1" + cuts;
+	//string bcuts = "qCostheta < 0 && qCostheta > -1. " + cuts;
+	int reco = normaltree->Draw("ThrustCos>> cosReco", fcuts.c_str());
+	//int reco = normaltree->Draw("qCostheta1>> cosReco", fcuts.c_str());
+	//    reco +=normaltree->Draw("qCostheta2>> +cosReco", fcuts.c_str());
+	string zcuts = "&&MCMass < 180 " + cuts;
+	string cccuts = "&&MCPDG == 4" + cuts;
+
+	//cosReco->Scale(0.5) ;
+	TF1* bkgf = NULL;
+	if (drawBkg) 
+	{
+		if (helicity) 
+		{
+			addBkg(cosRecoBkgZZ,"ZZWWhadronicLeft",cuts,bin_e, signalLumi / 100.); 
+			addBkg(cosRecoBkgZZ,"ZZhadronicLeft",cuts,bin_e, signalLumi / 250.); 
+			addBkg(cosRecoBkgZZ,"ZZsemileptonicLeft",cuts,bin_e, signalLumi / 250.);
+			addBkg(cosRecoBkgZZ,"WWsemileptonicLeft",cuts,bin_e, signalLumi / 100.);
+			addBkg(cosRecoBkgZZ,"WWhadronicLeft",cuts,bin_e, signalLumi / (72.));
+			addBkg(cosRecoBkgZZ,"HZhadronicLeft",cuts,bin_e, signalLumi / 1000.);
+			addBkg(cosRecoBkgMass, "ZReturnLeft", zcuts, bin_e, signalLumi / 13.5);
+			addBkg(cosCCbar, "ZReturnLeft", cccuts, bin_e, signalLumi / 13.5);
+		}
+		else 
+		{
+			addBkg(cosRecoBkgZZ,"ZZhadronicRight",cuts,bin_e, signalLumiR / 250.);
+			addBkg(cosRecoBkgZZ,"ZZsemileptonicRight",cuts,bin_e, signalLumiR / 250.);
+			addBkg(cosRecoBkgZZ,"HZhadronicRight",cuts,bin_e, signalLumiR / 1000.);
+			addBkg(cosRecoBkgMass, "ZReturnRight", zcuts, bin_e, signalLumi / 20.1);
+			addBkg(cosCCbar, "ZReturnRight", cccuts, bin_e, signalLumi / 20.1);
+		}
+		TF1* bkgf = fitBkg(cosRecoBkgZZ,cosRecoBkgMass,cosCCbar,bin_e);
+	}
+	makePretty(cosRecoBkgZZ,kRed,2);
+	if (drawBkg) 
+	{
+		cosReco->Add(cosRecoBkgZZ);//*/
+	}
+	file->cd();
+	if (drawCorrection) 
+	{
+		/*TH1F * cosRef = new TH1F("cosRef", "E(Ntracks)", bin_e,-1.0,max_e);
+		string cutsRef ="InvMass > 200 && maxPhotonEnergy < 40 && B1mass + B2mass < 130"; //cuts.substr(3);
+		normaltree->Draw("B1costheta>> cosRef",(cutsRef + "&& methodRefused > 0" ).c_str());
+		normaltree->Draw("B2costheta>> +cosRef",(cutsRef + "&& methodRefused > 0").c_str());*/
+		float perror = 0;
+		float pglobal = getPGlobal(bin_e, perror);
+		TH1F * correctedP = computeCorrectionF(cosReco, pglobal,perror, bin_e);
+		makePretty(correctedP, kBlue);
+		//makePretty(cosRef, kRed);
+	}
+	cosGen->SetStats(0);
+	if (filename == "TTBarProcessorRight.root") 
+	{
+		cosGen->SetTitle("e_{R}p_{L}");
+	}
+	if (filename == "TTBarProcessorLeft.root") 
+	{
+		cosGen->SetTitle("e_{L}p_{R}");
+	}
+	//cosGen->Scale(1./cosGen->GetEntries());
+	//cosReco->Scale(1./cosReco->GetEntries());
+	//TF1 * fgen = new TF1("fgen","pol2",-1.0,1.0);
+	TF1 * fgen = new TF1("fgen","[0]*(1+x*x) + [1]*x + [2]*(1-x*x) ",-1,1);
+	//TF1 * fgen = new TF1("fgen","[0]*(1+x*x) + [1]*x  ",-1,1);
+	//TF1 * fgen = new TF1("fgen","5650*((1+x*x)*[0] + [1]*x)  ",-1,1);
+	//TF1 * fgen2 = new TF1("fgen2","((pow([0]+[1],2) + [2]*[2])* (1+x*x) - 4*([0]+[1])*[2]*x + pow([0]/30+[1]*30,2)*(1+x*x))",-1.0,1.0);
+	//TF1 * fgen2 = new TF1("fgen2","((pow([0]+[1],2) + [2]*[2])* (1+x*x) - 4*([0]+[1])*[2]*x + (2*[0]*[1] + 900*[1])*(1+x*x))",-1.0,1.0);
+	//cosGen->Scale(1./cosGen->Integral());
+	//fgen2->SetParLimits(1,-1e-4,+1e-4);
+	TF1 * freco = new TF1("freco","[0]*(1+x*x) + [1]*x + [2]*(1-x*x) ",-fitRange, fitRange);
+	//TF1 * freco = new TF1("freco","[0]*(1+x*x) + [1]*x ",-fitRange, fitRange);
+	//freco->SetParLimits(2,1,1000);
+	//freco->SetParLimits(0,10,100000);
+	//TF1 * freco = new TF1("freco","[0]*(1 + [1]*x + x*x)",-fitRange, fitRange);
+	//TF1 * freco = new TF1("freco","pol2 ",-fitRange, fitRange);
+	TF1 * freco2 = new TF1("freco2","((pow([0]+[1],2) + [2]*[2])* (1+x*x) - 4*([0]+[1])*[2]*x + pow([0]/30+[1]*30,2)*(1+x*x))",-fitRange, fitRange);
+	fgen->SetLineColor(kGreen);
+	fgen->SetLineStyle(3);
+	freco->SetLineStyle(3);
+	int mid = (float)bin_e / 2;
+	//cosGen->Scale(.518*cosReco->GetEntries()/ cosGen->GetEntries());
+	cosGen->Scale(0.98/ (cosGen->GetBinContent(mid) + cosGen->GetBinContent(mid+1)) * (cosReco->GetBinContent(mid) + cosReco->GetBinContent(mid+1)));
+	cosGen->Fit("fgen","S");
+	//cosGen->Fit("fgen2","");
+	//correctedP->Fit("freco", "R");
+	cosReco->Fit("freco", "RS");
+	//cosReco->Fit("freco2", "R");
+	cosGen->SetMinimum(0);
+	cosGen->Draw("he");
+	//fgen2->Draw("same");
+	fgen->Draw("same");
+	cosGen->SetMinimum(0);
+	cosReco->Draw("samee");
+	//bkgf->Draw("same");
+	//fgen2->Draw();
+	//cosRef->Draw("samee")
+	//std::vector<float> * correlation = NULL;
+	float correlation = 0;
+	float correlation2 = 0;
+	if (drawCorrection) 
+	{
+		//correlation = new vector<float> ();
+		correctedP->Draw("samee");
+		TFitResultPtr r = correctedP->Fit("freco", "QRS");
+		//correlation->push_back(r->GetCovarianceMatrix()[0][1]);
+		correlation = r->GetCovarianceMatrix()[0][1];
+		correlation2 = r->GetCovarianceMatrix()[0][2];
+		
+		cout << "0: " << r->GetCovarianceMatrix()[0][0]  << " 01: " << r->GetCovarianceMatrix()[0][1]  << " 01: " << r->GetCovarianceMatrix()[1][0] <<  " 11: " << r->GetCovarianceMatrix()[1][1]<<  " 02: " <<  r->GetCovarianceMatrix()[2][0]<<  endl;
+	}
+	TF1 * freconobkg = NULL;
+	if (drawBkg) 
+	{
+		cosRecoBkgMass->Draw("same");
+		cosRecoBkgZZ->Draw("same");
+		cosCCbar->Draw("same");
+		TF1 * freconobkg = new TF1("freconobkg","freco-bkgf",-1,1);
+		freconobkg->SetLineColor(kGray);
+		freconobkg->SetLineStyle(3);
+		freconobkg->Draw("same");
+	}
+	TLegend *legendMean2 = new TLegend(0.15,0.76,0.5,0.85,NULL,"brNDC");
+        legendMean2->SetFillColor(kWhite);
+        legendMean2->SetBorderSize(0);
+        legendMean2->AddEntry(cosGen,"Generated","f");
+        legendMean2->AddEntry(cosReco,"Reconstructed","f");
+	if (drawCorrection) 
+	{
+		legendMean2->AddEntry(correctedP,"Corrected","f");
+		legendMean2->SetY1(legendMean2->GetY1()-0.04 );
+	}
+	if (drawBkg) 
+	{
+		legendMean2->AddEntry(cosRecoBkgMass,"Z return background","f");
+		legendMean2->AddEntry(cosCCbar,"c#bar{c} background","f");
+		legendMean2->AddEntry(cosRecoBkgZZ,"ZZ ZH WW background","f");
+		legendMean2->SetY1(legendMean2->GetY1()-0.12 );
+	}
+	legendMean2->Draw();
+	float afbgen = (float)(forward - backward) / (float) (forward + backward);
+	cout << "--------------------------------------------------------------\n";
+	cout << "--------------------------------------------------------------\n";
+	std::cout << "Afb gen: " << afbgen << " N: " << forward + backward <<  "\n";
+	std::cout << "N events: " << reco << " chi2: " << freco->GetChisquare() << "\n";
+	cout << "--------------------------------------------------------------\n";
+	//cout << "Integral: " << fgen->Integral(-1,0) << " " << fgen->Integral(0,1) << endl;
+	float afbgenf = (fgen->Integral(0,1) - fgen->Integral(-1,0)) / (fgen->Integral(0,1) + fgen->Integral(-1,0));
+	float afbrecof = (freco->Integral(0,1) - freco->Integral(-1,0)) / (freco->Integral(0,1) + freco->Integral(-1,0));
+
+	cout << "Afb gen functional: " << afbgenf << endl;
+	cout << "Afb reco functional: " << afbrecof << "(" << afbrecof / afbgenf *100 << "%)"   << endl;
+	cout << "--------------------------------------------------------------\n";
+	std::cout << "Intergral: " << cosReco->Integral() << "\n";
+	cout << "-------------------GENERATED--------------------------\n";
+	float error = 0.0;
+	getAfb(fgen, 1, error, helicity);
+	cout << "----------------RECONSTRUCTED-------------------------\n";
+	getAfb(freco, 1, error, helicity, bkgf, correlation, correlation2);
+
+	cout << "--------------------------------------------------------------\n";
+	convolute(cosGen, bin_e, 0);
+	cout << "--------------------------------------------------------------\n";
+	if (drawCorrection) 
+	{
+		convolute(correctedP, bin_e, 6);
+	}
+	else 
+	{
+		convolute(cosReco, bin_e, 6);
+	}
+	cout << "--------------------------------------------------------------\n";
+	//file->Close();
+}
+void makePretty(TH1 * vtxTotal, int color, int line = 0)
+{
+	vtxTotal->SetLineWidth(3);
+	vtxTotal->SetLineStyle(line);
+	vtxTotal->SetLineColor(color);
+	vtxTotal->SetMinimum(0);
+	vtxTotal->SetStats(0);
+}
+float getAfb(TF1* frecon, float range, float & error = 0.0, bool left = true, TF1 * bkgf = NULL, float dadb = 0., float dadc = 0.)
+{
+	float m = left? 1:-1;
+	float a = frecon->GetParameter(0);
+	float b = frecon->GetParameter(1);
+	float c = frecon->GetParameter(2);
+	float da = frecon->GetParError(0);
+	float db = frecon->GetParError(1);
+	float dc = frecon->GetParError(2);
+	if (bkgf) 
+	{
+		a -= (bkgf->GetParameter(0) + bkgf->GetParameter(2))/2;
+		b -= bkgf->GetParameter(1) ;
+		c -= (bkgf->GetParameter(0) - bkgf->GetParameter(2))/2 ;
+
+		da = sqrt(da*da + bkgf->GetParError(0)* bkgf->GetParError(0)/4 + bkgf->GetParError(2)* bkgf->GetParError(2)/4);
+		db = sqrt(db*db + bkgf->GetParError(1)* bkgf->GetParError(1)/4);
+		dc = sqrt(dc*dc + bkgf->GetParError(0)* bkgf->GetParError(0)/4 + bkgf->GetParError(2)* bkgf->GetParError(2)/4);
+	}
+	float norm =  39.56 / ((a * 8/3 + c*4/3) * bin_e / 2);
+	if (!left) 
+	{
+		norm *= 2.4591e-01;
+	}
+	
+	float d = frecon->GetParameter(3);
+	float dd = frecon->GetParError(3);
+	float I = 2*range* (pow(range,2) * a / 3 + c);
+	//float Afb = b*range/(2./3 * a * range + 2 * c);
+	float Afb = b/( 2*a  +  c)*3/4 ;
+	//float Afb = b*3/8;
+	//float Afb = b*range/freco->Integral(-range,range);
+	float deltaI = sqrt(4./9*pow(range,6) * da*da + 4*pow(range,2) * dc*dc);
+	//float deltaAfb = range / I * sqrt(db*db + b*b / I/I * deltaI * deltaI);
+	float deltaAfb = 3./4* sqrt(db*db/pow(2*a  +  c,2) +b*b*da*da / pow(2*a  +  c,4)  + b*b*dc*dc / pow(2*a  +  c,4));
+	//float deltaAfb =3./8* db;
+	//cout << "I\t= " << I << " +- " << deltaI << endl;
+	cout << "A: " << a << " +- " << sqrt(da*da) << "(" << da / a * 100 << "%)" << endl;
+	cout << "B: " << b << " +- " << sqrt(db*db) << "(" << db / b * 100 << "%)" <<endl;
+	cout << "C: " << c << " +- " << sqrt(dc*dc) << endl;//"(" << dc / c * 100 << "%)" <<endl;
+	cout << "dAB: +- " << dadb << endl;
+	cout << "dAC: +- " << dadc << endl;
+	cout << "Afb\t= " << Afb << " +- " << deltaAfb << "(" << deltaAfb / Afb * 100 << "%)" << endl;
+	float gamma = 125./4.18;
+	float F1A = sqrt( 2*a - m*sqrt(4*a*a - b*b ) ) / 2;
+	float D = sqrt( 2*a +  m*sqrt(4*a*a - b*b ) ) / 2 ;
+	
+	float dDdA = (1 +m* (2*a)/sqrt(4*a*a-b*b))/D/4; 
+	float dDdB =((b)/sqrt(4*a*a-b*b))/D/8; 
+	float d2DaAdB =  dDdA* dDdB;//b /8 / D / sqrt(4*a*a - b*b) * (dDdB / D + 4*a / pow(4*a*a - b*b,2));; 
+	
+	float dF1AdA = (1 - m*(2*a)/sqrt(4*a*a-b*b))/F1A/4; 
+	float dF1AdB = ((b)/sqrt(4*a*a-b*b))/F1A / 8; 
+
+	//float dF1A = sqrt(dF1AdA*dF1AdA * da*da + dF1AdB * dF1AdB *db*db + 2 *d2F1AdAdB* dadb); 
+	//float dD = sqrt(dDdA*dDdA * da*da + dDdB * dDdB *db*db+ 2*d2DaAdB *dadb); 
+	//float dF1A = (2*da - m*(4*a*da - b*db)/sqrt(4*a*a-b*b))/F1A/8; 
+	//float dD   = (2*da + m*(4*a*da - b*db)/sqrt(4*a*a-b*b))/D/8;
+	//float dF1A = (D*db/4 - F1A*da /2 ) / (D*D - F1A*F1A);
+	//float dD = (D*da /2 - F1A*db/4) / (D*D - F1A*F1A); - F1A*D*dadb
+	//float Dn = 0.635; float F1An = -0.436;
+	//float Dn = 0.074; float F1An = 0.375;
+	float d2F1AdAdB = (0.5*F1A*D/4/(fabs(pow(F1A,4) - pow(D,4))));//b /8 / F1A / sqrt(4*a*a - b*b) * (dF1AdB / F1A + 4*a / pow(4*a*a - b*b,2));
+	float alpha = D*D/(D*D + F1A*F1A);
+	float beta = F1A*F1A/(D*D + F1A*F1A);
+	//float dF1A = (da/a - 2 * alpha * db/b)/2/(beta - alpha) * F1A;
+	//float dD = (2 * beta * db/b - da/a)/2/(beta - alpha) * D;
+	float dF1A = -m*sqrt((pow(da/a,2) + pow(2*alpha*db/b,2) - 2*2*alpha*dadb/a/b))/2/(beta - alpha) * F1A;
+	float dD = -m*sqrt((pow(2*beta*db/b,2) + pow(da/a,2) - 2*2*beta*dadb/a/b))/2/(beta - alpha) * D;
+	//float dF1A = sqrt(((F1A*F1A * da*da - 0.25*D*D*db*db)/4/(pow(F1A,4) - pow(D,4))));
+	//float dD = sqrt(((D*D * da*da - 0.25*F1A*F1A*db*db)/4/(pow(D,4) - pow(F1A,4))));
+	//float F2V = (D + sqrt(D*D +(gamma * gamma - 1)*abs(c)))/( (gamma * gamma - 1));
+	float F2V = (sqrt(fabs(c)*gamma*gamma) - D)/(gamma*gamma - 1);
+	float dF2VdC = 1./(gamma*gamma-1) * ((gamma)/2/sqrt(fabs(c)));
+	float dF2VdD = 1./(gamma*gamma-1);
+	float F1V = D - F2V;
+	//float dF2V = dc*dc/fabs(c)/4/gamma/gamma;//1./(gamma*gamma-1) * (gamma * dc / 2 /sqrt(fabs(c)));
+	float dF2V = 0;//dc/sqrt(fabs(c))/2/gamma - dD/gamma/gamma;//1./(gamma*gamma-1) * (gamma * dc / 2 /sqrt(fabs(c)));
+	//float dF2V = sqrt(dc*dc/(c)/4/gamma/gamma + dD*dD/gamma/gamma - dc*dD /pow(gamma,3)/sqrt(c)*dadc  );//1./(gamma*gamma-1) * (gamma * dc / 2 /sqrt(fabs(c)));
+	//float dF2V = sqrt(dF2VdC*dF2VdC * dc*dc + dF2VdD*dF2VdD*dD*dD);
+	//float dF1V = sqrt(dF2VdC*dF2VdC * dc*dc + pow(gamma,4)*dF2VdD*dF2VdD*dD*dD);
+	//float dF1V = dD * gamma*gamma/(gamma*gamma-1);
+	float dF1V =dD - dF2V;
+	//float dF1V = sqrt(dD*dD - dc*dc/(c)/4/gamma/gamma); //- dD*dc / sqrt(c) / gamma * dadc);
+	cout << "D: " << D << " +- " << dD << endl;
+	cout << "a1: " << 1./2/(beta - alpha) * F1A* sqrt(norm) << " b1: " << 2 * alpha /2/(beta - alpha) * F1A * sqrt(norm) << endl;
+	cout << "a2: " << 2*beta/2/(beta - alpha) * D * sqrt(norm) << " b2: " << 1. /2/(beta - alpha) * D * sqrt(norm) << endl;
+	cout << "2nd: " << (F1A*F1A * da*da - 0.25*D*D*db*db) << " +- " << pow(F1A,4) - pow(D,4) << endl;
+	cout << "F1V: " << F1V * sqrt(norm) << " +- " << dF1V * sqrt(norm) << "(" <<dF1V / F1V *100<< "%)" 
+		<< " F2V: " << F2V * sqrt(norm)<< " +- " << dF2V * sqrt(norm) << "(" <<dF2V / F2V *100<< "%)" 
+		<< " F1A: " << F1A * sqrt(norm)<< " +- " << dF1A * sqrt(norm) << "(" <<dF1A / F1A *100<< "%)" << endl;
+	cout << "Check dF1V: " << 0.5*(da/a - 2* 0.538* db/b)/0.076 << endl; //2*(F1A*dF1A + D *dD) << endl;
+	cout << "Check dF1A: " <<  0.5*(da/a - 2* 0.462* db/b)/0.076 << endl;
+	//cout << "Check dA: " <<sqrt(4*D*D*dD*dD + 4*F1A*F1A*dF1A*dF1A) << endl;
+	//cout << "Check dB: " <<sqrt(16*F1A*F1A*dD*dD + 16*D*D*dF1A*dF1A) << endl;
+	cout << "Check dA: " <<(2*D*dD + 2*F1A*dF1A) << endl;
+	cout << "Check dB: " <<(4*F1A*dD + 4*D*dF1A) << endl;
+	//cout << "Check C: " << pow(F1V + gamma*gamma * F2V,2)/gamma/gamma << endl;
+	//cout << "Check B: " <<4*(F1V + F2V)*F1A << endl;
+	//cout << "Check A: " <<pow(F1V + F2V,2) + F1A*F1A << endl;
+	error = deltaAfb / Afb * 100 ;
+	return Afb;
+}
+void addBkg(TH1 * vtxTotal, string name, string cuts, int bin_e, float ratio = 1.0)
+{
+	string root = ".root";
+	string fullcuts = "methodUsed > 0" + cuts;
+	string totalpath = BKG_PATH + name + root;
+	TFile * fileBkg = TFile::Open(totalpath.c_str());
+	fileBkg->cd();
+	TH1F * cosRecoBkgZZtmp = new TH1F(name.c_str(), "E(Ntracks)", bin_e,-1.0,1.0);
+	int nevents =  Stats->Draw(("qCostheta1>> "+name).c_str(), fullcuts.c_str());
+	cout << "Bkg: " << name << " has "  << nevents * ratio << endl;
+	vtxTotal->Add(cosRecoBkgZZtmp, ratio);
+}
+TF1 * fitBkg(TH1 * ccbar, TH1* zreturn, TH1 * zz, int bin_e = 60)
+{
+        //TF1 * bkgf = new TF1("bkgf","pol6", -1,1);
+        //TF1 * bkgf = new TF1("bkgf","[0] + [1] * x + [2] *x*x + [3]*x*x*x+[4] * x*x*x*x + [5]*x*x*x*x*x + [6] *x*x*x*x*x*x + [7] *x*x*x*x*x*x*x + [8] *x*x*x*x*x*x*x*x", -1,1);
+        TF1 * bkgf = new TF1("bkgf","[0] + [1] * x + [2] *x*x ", -1,1);
+	TH1F * combine = new TH1F("bkg", "",bin_e,-1,1);
+	combine->Add(ccbar);
+	combine->Add(zreturn);
+	combine->Add(zz);
+	combine->Fit(bkgf);
+	return bkgf;
+}						
+
+void convolute(TH1* freco, int bin_e, int offset = 0)
+{
+	float dcos = 2. / bin_e;
+	float r = 1.-offset*dcos;
+	//float r = 0.85;
+	cout << "Range: " << r << endl;
+	float sumA = 0;
+	float sumB = 0;
+	float sumC = 0;
+	float sum = 0;
+	float a1 =-45./16/r/r/r     * (1./3 - r*r/5); // -3./8
+	float b1 = 45./16/r/r/r/r/r * (1    - r*r/3); // 15/8
+	float a2 = 45./16/r/r/r     * (1./3 + r*r/5); // 3./2
+	float b2 =-45./16/r/r/r/r/r * (1    + r*r/3); // -15/4
+	for (unsigned int i = 1 + offset; i < bin_e+1 - offset; i++) 
+	{
+		float cos_i = freco->GetBinCenter(i);
+		float N_i = freco->GetBinContent(i);
+		float N_j = freco->GetBinContent(i+1);
+		sum += N_i * dcos;
+		sumA += N_i * (a1 + b1*cos_i*cos_i) * dcos;
+		sumB += cos_i * N_i * dcos * 3. / 2 /r/r/r;
+		sumC += N_i * (a2 + b2*cos_i*cos_i) * dcos;
+		//sumA += N_i * (1-25*cos_i / 16) * dcos;
+		//cout << "cos: " << cos_i << " N: " << N_i << endl; 
+	}
+	cout << "SumA: " << sumA << endl;
+	cout << "SumB: " << sumB  << endl;
+	cout << "SumC: " << sumC  << endl;
+	cout << "Integral: " << sum  << endl;
+	//cout << "Sigma: " << sumA /sum  << endl;
+	cout << "Afb: " << sumB / sum  << endl;
+}
